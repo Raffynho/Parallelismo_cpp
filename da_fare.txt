@@ -1,0 +1,13 @@
+Programma principale 
+- separare le funzioni
+- fare libreria function.h
+- fare main.cpp
+- tenere main in file main.cpp
+
+Fare decompressore 
+
+Fare programma parallelizzato openMP
+
+Vedere se progetto puo' essere approvato
+
+
