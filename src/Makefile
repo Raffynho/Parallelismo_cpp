@@ -1,55 +1,82 @@
 CXX = g++
-CXXFLAGS = -Wall -Wextra -std=c++17 -O2 -pthread
+# Aggiunto -fopenmp ai flag globali
+CXXFLAGS = -Wall -Wextra -std=c++17 -O2 -pthread -fopenmp
 
-# Nomi dei due eseguibili
-TARGET_HUFFMAN = huffman
+TARGET_SEQ = huffman_seq
+TARGET_OMP = huffman_omp
 TARGET_GEN = generator
 
-CHARS ?= 1000000
+.PHONY: all clean run-gen benchmark
 
-# Diciamo a Make quali comandi non sono file fisici
-.PHONY: all clean run run-gen
+# Di default compila tutto
+all: $(TARGET_SEQ) $(TARGET_OMP) $(TARGET_GEN)
 
-# Di default, 'make' ora compila ENTRAMBI i programmi
-all: $(TARGET_HUFFMAN) $(TARGET_GEN)
+# L'eseguibile sequenziale unisce main.o e huffman.o
+$(TARGET_SEQ): main.o huffman.o
+	$(CXX) $(CXXFLAGS) -o $(TARGET_SEQ) main.o huffman.o
 
-# Regola per il programma di compressione
-$(TARGET_HUFFMAN): main.o
-	$(CXX) $(CXXFLAGS) -o $(TARGET_HUFFMAN) main.o
+# L'eseguibile multicore unisce main.o e huffman_omp.o
+$(TARGET_OMP): main.o huffman_omp.o
+	$(CXX) $(CXXFLAGS) -o $(TARGET_OMP) main.o huffman_omp.o
 
-# Regola per il generatore di testo
 $(TARGET_GEN): generator.o
 	$(CXX) $(CXXFLAGS) -o $(TARGET_GEN) generator.o
 
-# Regola per compilare i file .cpp in file .o
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Esegue il programma di compressione
-run: $(TARGET_HUFFMAN)
-	./$(TARGET_HUFFMAN)
-
-# Esegue il programma generatore di testo passandogli la variabile CHARS
 run-gen: $(TARGET_GEN)
 	./$(TARGET_GEN) $(CHARS)
 
-# Esegue un test prestazionale automatico e salva i risultati in un CSV
-benchmark: $(TARGET_GEN) $(TARGET_HUFFMAN)
-	@echo "\nINIZIO BENCHMARK AUTOMATICO...\n"
-	@echo "Preparazione file CSV..."
-	@echo "Dimensione Originale (byte),Dimensione Compressa (byte),Tempo (ms)" > benchmark_results.csv
-	@for size in 1000 100000 500000 1000000 5000000 10000000 100000000 1000000000; do \
+seq-benchmark: all
+	@echo "\nINIZIO BENCHMARK COMPARATIVO...\n"
+	@echo "Tipo,Dimensione Originale (byte),Dimensione Compressa (byte),Tempo Compressione (ms),Tempo Decompressione (ms),Bit Perfect" > benchmark_results.csv
+	@for size in 100000 500000 1000000 5000000 10000000 25000000 50000000; do \
 		echo "=================================================="; \
 		echo ">>> GENERAZIONE FILE CON $$size CARATTERI... <<<"; \
 		./$(TARGET_GEN) $$size > /dev/null; \
-		echo ">>> ESECUZIONE (5 RIPETIZIONI) <<<"; \
-		for i in 1 2 3 4 5 6 7 8 9 10; do \
-			echo -n "Run $$i: "; \
-			./$(TARGET_HUFFMAN); \
+		echo "--- ESECUZIONE SINGLE CORE ---"; \
+		for i in 1 2 3; do \
+			./$(TARGET_SEQ) Single-Core; \
 		done; \
 	done
 	@echo "=================================================="
-	@echo "BENCHMARK COMPLETATO! Risultati salvati in 'benchmark_results.csv'\n"
-# Pulisce i file generati
+	@echo "BENCHMARK COMPLETATO! Risultati nel file CSV.\n"
+
+multi-benchmark: all
+	@echo "\nINIZIO BENCHMARK COMPARATIVO...\n"
+	@echo "Tipo,Dimensione Originale (byte),Dimensione Compressa (byte),Tempo Compressione (ms),Tempo Decompressione (ms),Bit Perfect" > benchmark_results.csv
+	@for size in 100000 500000 1000000 5000000 10000000 25000000 50000000; do \
+		echo "=================================================="; \
+		echo ">>> GENERAZIONE FILE CON $$size CARATTERI... <<<"; \
+		./$(TARGET_GEN) $$size > /dev/null; \
+		echo "--- ESECUZIONE MULTI CORE ---"; \
+		for i in 1 2 3; do \
+			./$(TARGET_OMP) Multi-Core; \
+		done; \
+	done
+	@echo "=================================================="
+	@echo "BENCHMARK COMPLETATO! Risultati nel file CSV.\n"
+	
+# Esegue il benchmark confrontando i due programmi!
+benchmark: all
+	@echo "\nINIZIO BENCHMARK COMPARATIVO...\n"
+	@echo "Tipo,Dimensione Originale (byte),Dimensione Compressa (byte),Tempo Compressione (ms),Tempo Decompressione (ms),Bit Perfect" > benchmark_results.csv
+	@for size in 100000 500000 1000000 5000000 10000000 25000000 50000000; do \
+		echo "=================================================="; \
+		echo ">>> GENERAZIONE FILE CON $$size CARATTERI... <<<"; \
+		./$(TARGET_GEN) $$size > /dev/null; \
+		echo "--- ESECUZIONE SINGLE CORE ---"; \
+		for i in 1 2 3; do \
+			./$(TARGET_SEQ) Single-Core; \
+		done; \
+		echo "--- ESECUZIONE MULTI CORE ---"; \
+		for i in 1 2 3; do \
+			./$(TARGET_OMP) Multi-Core; \
+		done; \
+	done
+	@echo "=================================================="
+	@echo "BENCHMARK COMPLETATO! Risultati nel file CSV.\n"
+
 clean:
-	rm -f *.o $(TARGET_HUFFMAN) $(TARGET_GEN) output.bin input.txt
+	rm -f *.o $(TARGET_SEQ) $(TARGET_OMP) $(TARGET_GEN) output.bin input.txt
